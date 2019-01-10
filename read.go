@@ -1,6 +1,7 @@
 // 改自 https://github.com/kingwkb/readability python版本
 // 于2016-11-10
 // by: ying32
+// TODO: 重构这些代码
 package readability
 
 import (
@@ -49,12 +50,15 @@ func strLen(str string) int {
 	return utf8.RuneCountInString(str)
 }
 
-func NewFromReader(reader io.Reader) (*TReadability, error) {
+func NewFromReader(reader io.Reader, url string) (*TReadability, error) {
 	v := &TReadability{}
 	var err error
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
+	}
+	if url != "" {
+		v.url, _ = nurl.Parse(url)
 	}
 	v.html = string(b)
 	v.candidates = make(map[string]TCandidateItem, 0)
