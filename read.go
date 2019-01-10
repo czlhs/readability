@@ -1,10 +1,12 @@
 // 改自 https://github.com/kingwkb/readability python版本
 // 于2016-11-10
-// by: ying32  
+// by: ying32
 package readability
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 
 	"crypto/md5"
 	"errors"
@@ -45,6 +47,30 @@ func HashStr(node *goquery.Selection) string {
 
 func strLen(str string) int {
 	return utf8.RuneCountInString(str)
+}
+
+func NewFromReader(reader io.Reader) (*TReadability, error) {
+	v := &TReadability{}
+	var err error
+	b, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	v.html = string(b)
+	v.candidates = make(map[string]TCandidateItem, 0)
+
+	v.html = replaceBrs.ReplaceAllString(v.html, "</p><p>")
+	//v.html = replaceFonts.ReplaceAllString(v.html, `<\g<1>span>`)
+
+	if v.html == "" {
+		return nil, errors.New("html为空！")
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(v.html))
+	if err != nil {
+		return nil, err
+	}
+	v.htmlDoc = doc
+	return v, nil
 }
 
 func NewReadability(url string) (*TReadability, error) {
@@ -258,6 +284,7 @@ func (self *TReadability) clean(e *goquery.Selection, tag string) {
 		//for _, attribute := range target.Nodes[0].Attr {
 		//             get_attr := target.
 		//		}
+		// TODO match v.qq.com
 		if isEmbed && videos.MatchString(attributeValues) {
 			return
 		}
@@ -286,7 +313,9 @@ func (self *TReadability) cleanArticle(content *goquery.Selection) string {
 	self.cleanConditionally(content, "table")
 	self.cleanConditionally(content, "ul")
 	self.cleanConditionally(content, "div")
-	self.fixImagesPath(content)
+	if self.url != nil {
+		self.fixImagesPath(content)
+	}
 
 	html, err := content.Html()
 	if err != nil {
