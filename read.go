@@ -16,8 +16,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	ghtml "html"
-
 	"golang.org/x/net/html"
 
 	"github.com/PuerkitoBio/goquery"
@@ -36,6 +34,9 @@ type TReadability struct {
 
 	Title   string
 	Content string
+
+	Summary   string // 摘要
+	ImageList []string
 }
 
 func HashStr(node *goquery.Selection) string {
@@ -64,6 +65,8 @@ func NewFromReader(reader io.Reader, url string) (*TReadability, error) {
 	v.candidates = make(map[string]TCandidateItem, 0)
 
 	v.html = replaceBrs.ReplaceAllString(v.html, "</p><p>")
+	v.html = strings.Replace(v.html, "<noscript>", "", -1)
+	v.html = strings.Replace(v.html, "</noscript>", "", -1)
 	//v.html = replaceFonts.ReplaceAllString(v.html, `<\g<1>span>`)
 
 	if v.html == "" {
@@ -148,20 +151,25 @@ func (self *TReadability) fixImagesPath(node *goquery.Selection) {
 				img.SetAttr("src", f)
 				img.RemoveAttr("file")
 			}
+			if f, ok := img.Attr("data-src"); ok {
+				src = f
+			}
 			if src == "" {
 				img.Remove()
 				return
 			}
 			if src != "" {
 				if !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
-					var newSrc string
 					if strings.HasPrefix(src, "/") {
-						newSrc = self.url.Scheme + "://" + self.url.Host + src
+						src = self.url.Scheme + "://" + self.url.Host + src
 					} else {
-						newSrc = self.url.Scheme + "://" + self.url.Host + self.url.Path + src
+						src = self.url.Scheme + "://" + self.url.Host + self.url.Path + src
 					}
-					img.SetAttr("src", newSrc)
+					img.SetAttr("src", src)
 				}
+			}
+			if !strings.Contains(src, "data:image") {
+				self.ImageList = append(self.ImageList, src)
 			}
 		})
 }
@@ -266,7 +274,7 @@ func (self *TReadability) cleanStyle(e *goquery.Selection) {
 	e.Find("*").Each(func(i int, elem *goquery.Selection) {
 		elem.RemoveAttr("class")
 		elem.RemoveAttr("id")
-		elem.RemoveAttr("style")
+		// elem.RemoveAttr("style")
 		elem.RemoveAttr("width")
 		elem.RemoveAttr("height")
 		elem.RemoveAttr("onclick")
@@ -321,11 +329,16 @@ func (self *TReadability) cleanArticle(content *goquery.Selection) string {
 		self.fixImagesPath(content)
 	}
 
+	summary := ""
+	content.Find("p").Each(func(i int, s *goquery.Selection) {
+		summary = summary + s.Text()
+	})
+	self.Summary = summary
 	html, err := content.Html()
 	if err != nil {
 		return ""
 	}
-	html = ghtml.UnescapeString(html)
+	// html = ghtml.UnescapeString(html)
 	return killBreaks.ReplaceAllString(html, "<br />")
 }
 
