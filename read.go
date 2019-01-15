@@ -1,7 +1,3 @@
-// 改自 https://github.com/kingwkb/readability python版本
-// 于2016-11-10
-// by: ying32
-// TODO: 重构这些代码
 package readability
 
 import (
@@ -35,7 +31,7 @@ type TReadability struct {
 	Title   string
 	Content string
 
-	Summary   string // 摘要
+	Summary   string // 纯文字正文
 	ImageList []string
 }
 
@@ -160,7 +156,9 @@ func (self *TReadability) fixImagesPath(node *goquery.Selection) {
 			}
 			if src != "" {
 				if !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
-					if strings.HasPrefix(src, "/") {
+					if strings.HasPrefix(src, "//") {
+						src = self.url.Scheme + ":" + src
+					} else if strings.HasPrefix(src, "/") {
 						src = self.url.Scheme + "://" + self.url.Host + src
 					} else {
 						src = self.url.Scheme + "://" + self.url.Host + self.url.Path + src
