@@ -1,144 +1,17 @@
 package readability
 
 import (
-	"fmt"
-	"io"
-	"io/ioutil"
-
-	"crypto/md5"
-	"errors"
 	"math"
-	nurl "net/url"
 	"strings"
-	"unicode/utf8"
-
-	"golang.org/x/net/html"
 
 	"github.com/PuerkitoBio/goquery"
 )
-
-type TCandidateItem struct {
-	score float64
-	node  *goquery.Selection
-}
-
-type TReadability struct {
-	html       string
-	url        *nurl.URL
-	htmlDoc    *goquery.Document
-	candidates map[string]TCandidateItem
-
-	Title   string
-	Content string
-
-	Summary   string // 纯文字正文
-	ImageList []string
-}
-
-func HashStr(node *goquery.Selection) string {
-	if node == nil {
-		return ""
-	}
-	html, _ := node.Html()
-	return fmt.Sprintf("%x", md5.Sum([]byte(html)))
-}
-
-func strLen(str string) int {
-	return utf8.RuneCountInString(str)
-}
-
-func NewFromReader(reader io.Reader, url string) (*TReadability, error) {
-	v := &TReadability{}
-	var err error
-	b, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	if url != "" {
-		v.url, _ = nurl.Parse(url)
-	}
-	v.html = string(b)
-	v.candidates = make(map[string]TCandidateItem, 0)
-
-	v.html = replaceBrs.ReplaceAllString(v.html, "</p><p>")
-	v.html = strings.Replace(v.html, "<noscript>", "", -1)
-	v.html = strings.Replace(v.html, "</noscript>", "", -1)
-	//v.html = replaceFonts.ReplaceAllString(v.html, `<\g<1>span>`)
-
-	if v.html == "" {
-		return nil, errors.New("html为空！")
-	}
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(v.html))
-	if err != nil {
-		return nil, err
-	}
-	v.htmlDoc = doc
-	return v, nil
-}
-
-func NewReadability(url string) (*TReadability, error) {
-
-	v := &TReadability{}
-	var err error
-	v.html, err = httpGet(url)
-	if err != nil {
-		return nil, err
-	}
-	v.url, _ = nurl.Parse(url)
-	v.candidates = make(map[string]TCandidateItem, 0)
-
-	v.html = replaceBrs.ReplaceAllString(v.html, "</p><p>")
-	//v.html = replaceFonts.ReplaceAllString(v.html, `<\g<1>span>`)
-
-	if v.html == "" {
-		return nil, errors.New("html为空！")
-	}
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(v.html))
-	if err != nil {
-		return nil, err
-	}
-	v.htmlDoc = doc
-	return v, nil
-}
-
-func (self *TReadability) removeScript() {
-	self.htmlDoc.Find("script").Remove()
-}
-
-func (self *TReadability) removeStyle() {
-	self.htmlDoc.Find("style").Remove()
-}
-
-func (self *TReadability) removeLink() {
-	self.htmlDoc.Find("link").Remove()
-}
-
-func (self *TReadability) getTitle() string {
-	return self.htmlDoc.Find("title").Text()
-}
-
-func (self *TReadability) getLinkDensity(node *goquery.Selection) float64 {
-	if node == nil {
-		return 0
-	}
-	textLength := float64(strLen(node.Text()))
-	if textLength == 0 {
-		return 0
-	}
-	linkLength := 0.0
-	node.Find("a").Each(
-		func(i int, link *goquery.Selection) {
-			linkLength += float64(strLen(link.Text()))
-		})
-	return linkLength / textLength
-}
 
 func (self *TReadability) fixImagesPath(node *goquery.Selection) {
 	if node == nil {
 		return
 	}
 	node.Find("img").Each(
-
 		func(i int, img *goquery.Selection) {
 			src, _ := img.Attr("src")
 			// dz论坛的有些img属性使用的是file字段
@@ -150,67 +23,28 @@ func (self *TReadability) fixImagesPath(node *goquery.Selection) {
 			if f, ok := img.Attr("data-src"); ok {
 				src = f
 			}
-			if src == "" {
-				img.Remove()
-				return
-			}
-			if src != "" {
-				if !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
-					if strings.HasPrefix(src, "//") {
-						src = self.url.Scheme + ":" + src
-					} else if strings.HasPrefix(src, "/") {
-						src = self.url.Scheme + "://" + self.url.Host + src
-					} else {
-						src = self.url.Scheme + "://" + self.url.Host + self.url.Path + src
-					}
-					img.SetAttr("src", src)
-				}
-			}
-			if !strings.Contains(src, "data:image") {
+			if src != "" && !strings.Contains(src, "data:image") {
+				src = tr.fixLink(src)
 				self.ImageList = append(self.ImageList, src)
+				img.SetAttr("src", src)
+			} else {
+				img.Remove()
 			}
 		})
 }
-
-func (self *TReadability) getClassWeight(node *goquery.Selection) float64 {
-	weight := 0.0
-	if str, b := node.Attr("class"); b {
-		if negative.MatchString(str) {
-			weight -= 25
-		}
-		if positive.MatchString(str) {
-			weight += 25
-		}
+func (tr *TReadability) fixHrefPath(node *goquery.Selection) {
+	if node == nil {
+		return
 	}
-	if str, b := node.Attr("id"); b {
-		if negative.MatchString(str) {
-			weight -= 25
+	node.Find("a").Each(func(i int, link *goquery.Selection) {
+		src, _ := link.Attr("href")
+		src = tr.fixLink(src)
+		if src == "" {
+			link.Remove()
+			return
 		}
-		if positive.MatchString(str) {
-			weight += 25
-		}
-	}
-	return weight
-}
-
-func (self *TReadability) initializeNode(node *goquery.Selection) TCandidateItem {
-	contentScore := 0.0
-	switch self.getTagName(node) {
-	case "article":
-		contentScore += 10
-	case "section":
-		contentScore += 8
-	case "div":
-		contentScore += 5
-	case "pre", "blockquote", "td":
-		contentScore += 3
-	case "form", "ol", "dl", "dd", "dt", "li", "address":
-		contentScore -= 3
-	case "th", "h1", "h2", "h3", "h4", "h5", "h6":
-		contentScore -= 5
-	}
-	contentScore += self.getClassWeight(node)
-	return TCandidateItem{contentScore, node}
+		link.SetAttr("href", src)
+	})
 }
 
 func (self *TReadability) cleanConditionally(e *goquery.Selection, tag string) {
@@ -291,9 +125,6 @@ func (self *TReadability) clean(e *goquery.Selection, tag string) {
 	}
 	e.Find(tag).Each(func(i int, target *goquery.Selection) {
 		attributeValues := ""
-		//for _, attribute := range target.Nodes[0].Attr {
-		//             get_attr := target.
-		//		}
 		// TODO match v.qq.com
 		if isEmbed && videos.MatchString(attributeValues) {
 			return
@@ -305,7 +136,7 @@ func (self *TReadability) clean(e *goquery.Selection, tag string) {
 	})
 }
 
-func (self *TReadability) cleanArticle(content *goquery.Selection) string {
+func (self *TReadability) cleanArticle(content *goquery.Selection) {
 	if content == nil {
 		return ""
 	}
@@ -323,9 +154,9 @@ func (self *TReadability) cleanArticle(content *goquery.Selection) string {
 	self.cleanConditionally(content, "table")
 	self.cleanConditionally(content, "ul")
 	self.cleanConditionally(content, "div")
-	if self.url != nil {
-		self.fixImagesPath(content)
-	}
+
+	self.fixImagesPath(content)
+	self.fixHrefPath(content)
 
 	summary := ""
 	content.Find("p").Each(func(i int, s *goquery.Selection) {
@@ -338,109 +169,4 @@ func (self *TReadability) cleanArticle(content *goquery.Selection) string {
 	}
 	// html = ghtml.UnescapeString(html)
 	return killBreaks.ReplaceAllString(html, "<br />")
-}
-
-func (self *TReadability) getTagName(node *goquery.Selection) string {
-	if node == nil {
-		return ""
-	}
-	return node.Nodes[0].Data
-}
-
-func (self *TReadability) isComment(node *goquery.Selection) bool {
-	if node == nil {
-		return false
-	}
-	return node.Nodes[0].Type == html.CommentNode
-}
-
-func (self *TReadability) grabArticle() string {
-
-	self.htmlDoc.Find("*").Each(func(i int, elem *goquery.Selection) {
-
-		if self.isComment(elem) {
-			elem.Remove()
-			return
-		}
-		unlikelyMatchString := elem.AttrOr("id", "") + " " + elem.AttrOr("class", "")
-
-		if unlikelyCandidates.MatchString(unlikelyMatchString) &&
-			!okMaybeItsACandidate.MatchString(unlikelyMatchString) &&
-			self.getTagName(elem) != "body" {
-			elem.Remove()
-			return
-		}
-		if unlikelyElements.MatchString(self.getTagName(elem)) {
-			elem.Remove()
-			return
-		}
-		if self.getTagName(elem) == "div" {
-			s, _ := elem.Html()
-			if !divToPElements.MatchString(s) {
-				elem.Nodes[0].Data = "p"
-			}
-		}
-	})
-
-	self.htmlDoc.Find("p").Each(func(i int, node *goquery.Selection) {
-		parentNode := node.Parent()
-		grandParentNode := parentNode.Parent()
-		innerText := node.Text()
-
-		if parentNode == nil || strLen(innerText) < 20 {
-			return
-		}
-		parentHash := HashStr(parentNode)
-		grandParentHash := HashStr(grandParentNode)
-		if _, ok := self.candidates[parentHash]; !ok {
-			self.candidates[parentHash] = self.initializeNode(parentNode)
-		}
-		if _, ok := self.candidates[grandParentHash]; !ok {
-			self.candidates[grandParentHash] = self.initializeNode(grandParentNode)
-		}
-		contentScore := 1.0
-		contentScore += float64(strings.Count(innerText, ","))
-		contentScore += float64(strings.Count(innerText, "，"))
-		contentScore += math.Min(math.Floor(float64(strLen(innerText)/100)), 3)
-
-		v, _ := self.candidates[parentHash]
-		v.score += contentScore
-		self.candidates[parentHash] = v
-
-		if grandParentNode != nil {
-			v, _ = self.candidates[grandParentHash]
-			v.score += contentScore / 2.0
-			self.candidates[grandParentHash] = v
-		}
-	})
-
-	var topCandidate *TCandidateItem
-	for k, v := range self.candidates {
-		v.score = v.score * (1 - self.getLinkDensity(v.node))
-		self.candidates[k] = v
-
-		//		fmt.Println(v.score)
-		//		fmt.Println(v.node.Text())
-		//		fmt.Println("---------------------------------------------------------------------------------------------------------")
-		if topCandidate == nil || v.score > topCandidate.score {
-			if topCandidate == nil {
-				topCandidate = new(TCandidateItem)
-			}
-			topCandidate.score = v.score
-			topCandidate.node = v.node
-		}
-	}
-	if topCandidate != nil {
-		//		fmt.Println("topCandidate.score=", topCandidate.score)
-		return self.cleanArticle(topCandidate.node)
-	}
-	return ""
-}
-
-func (self *TReadability) Parse() {
-	self.removeScript()
-	self.removeStyle()
-	self.removeLink()
-	self.Title = self.getTitle()
-	self.Content = self.grabArticle()
 }

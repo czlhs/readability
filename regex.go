@@ -1,5 +1,5 @@
 // 改自 https://github.com/kingwkb/readability python版本
-// 于2016-11-10 
+// 于2016-11-10
 // by: ying32
 package readability
 
@@ -27,4 +27,5 @@ var (
 	unlikelyElements, _ = regexp.Compile(`(?is)(input|time|button)`)
 
 	pageCodeReg, _ = regexp.Compile(`(?is)<meta.+?charset=[^\w]?([-\w]+)`)
+	validURL       = regexp.MustCompile(`^(https?)?://(www\.)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$`)
 )
