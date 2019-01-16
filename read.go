@@ -7,7 +7,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-func (self *TReadability) fixImagesPath(node *goquery.Selection) {
+func (tr *TReadability) fixImagesPath(node *goquery.Selection) {
 	if node == nil {
 		return
 	}
@@ -25,7 +25,7 @@ func (self *TReadability) fixImagesPath(node *goquery.Selection) {
 			}
 			if src != "" && !strings.Contains(src, "data:image") {
 				src = tr.fixLink(src)
-				self.ImageList = append(self.ImageList, src)
+				tr.ImageList = append(tr.ImageList, src)
 				img.SetAttr("src", src)
 			} else {
 				img.Remove()
@@ -47,15 +47,15 @@ func (tr *TReadability) fixHrefPath(node *goquery.Selection) {
 	})
 }
 
-func (self *TReadability) cleanConditionally(e *goquery.Selection, tag string) {
+func (tr *TReadability) cleanConditionally(e *goquery.Selection, tag string) {
 	if e == nil {
 		return
 	}
 	contentScore := 0.0
 	e.Find(tag).Each(func(i int, node *goquery.Selection) {
-		weight := self.getClassWeight(node)
+		weight := tr.getClassWeight(node)
 		hashNode := HashStr(node)
-		if v, ok := self.candidates[hashNode]; ok {
+		if v, ok := tr.candidates[hashNode]; ok {
 			contentScore = v.score
 		} else {
 			contentScore = 0
@@ -74,7 +74,7 @@ func (self *TReadability) cleanConditionally(e *goquery.Selection, tag string) {
 					embedCount += 1
 				}
 			})
-			linkDensity := self.getLinkDensity(node)
+			linkDensity := tr.getLinkDensity(node)
 			contentLength := strLen(node.Text())
 			toRemove := false
 			if img > p && img > 1 {
@@ -99,7 +99,7 @@ func (self *TReadability) cleanConditionally(e *goquery.Selection, tag string) {
 	})
 }
 
-func (self *TReadability) cleanStyle(e *goquery.Selection) {
+func (tr *TReadability) cleanStyle(e *goquery.Selection) {
 	if e == nil {
 		return
 	}
@@ -115,7 +115,7 @@ func (self *TReadability) cleanStyle(e *goquery.Selection) {
 	})
 }
 
-func (self *TReadability) clean(e *goquery.Selection, tag string) {
+func (tr *TReadability) clean(e *goquery.Selection, tag string) {
 	if e == nil {
 		return
 	}
@@ -136,37 +136,38 @@ func (self *TReadability) clean(e *goquery.Selection, tag string) {
 	})
 }
 
-func (self *TReadability) cleanArticle(content *goquery.Selection) {
+func (tr *TReadability) cleanArticle(content *goquery.Selection) {
 	if content == nil {
-		return ""
+		return
 	}
-	self.cleanStyle(content)
-	self.clean(content, "h1")
-	self.clean(content, "object")
-	self.cleanConditionally(content, "form")
+	tr.cleanStyle(content)
+	tr.clean(content, "h1")
+	tr.clean(content, "object")
+	tr.cleanConditionally(content, "form")
 	if content.Find("h2").Length() == 1 {
-		self.clean(content, "h2")
+		tr.clean(content, "h2")
 	}
 	if content.Find("h3").Length() == 1 {
-		self.clean(content, "h3")
+		tr.clean(content, "h3")
 	}
-	self.clean(content, "iframe")
-	self.cleanConditionally(content, "table")
-	self.cleanConditionally(content, "ul")
-	self.cleanConditionally(content, "div")
+	tr.clean(content, "iframe")
+	tr.cleanConditionally(content, "table")
+	tr.cleanConditionally(content, "ul")
+	tr.cleanConditionally(content, "div")
 
-	self.fixImagesPath(content)
-	self.fixHrefPath(content)
+	tr.fixImagesPath(content)
+	tr.fixHrefPath(content)
 
 	summary := ""
 	content.Find("p").Each(func(i int, s *goquery.Selection) {
 		summary = summary + s.Text()
 	})
-	self.Summary = summary
+	tr.Summary = summary
 	html, err := content.Html()
 	if err != nil {
-		return ""
+		return
 	}
 	// html = ghtml.UnescapeString(html)
-	return killBreaks.ReplaceAllString(html, "<br />")
+	tr.Content = killBreaks.ReplaceAllString(html, "<br />")
+	return
 }

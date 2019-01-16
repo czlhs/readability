@@ -22,28 +22,28 @@ func HashStr(node *goquery.Selection) string {
 func strLen(str string) int {
 	return utf8.RuneCountInString(str)
 }
-func (self *TReadability) getTagName(node *goquery.Selection) string {
+func (tr *TReadability) getTagName(node *goquery.Selection) string {
 	if node == nil {
 		return ""
 	}
 	return node.Nodes[0].Data
 }
 
-func (self *TReadability) isComment(node *goquery.Selection) bool {
+func (tr *TReadability) isComment(node *goquery.Selection) bool {
 	if node == nil {
 		return false
 	}
 	return node.Nodes[0].Type == html.CommentNode
 }
 
-func (tr *TReadability) fixLink(url string) {
+func (tr *TReadability) fixLink(url string) string {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		if strings.HasPrefix(url, "//") {
-			url = self.url.Scheme + ":" + url
+			url = tr.url.Scheme + ":" + url
 		} else if strings.HasPrefix(url, "/") {
-			url = self.url.Scheme + "://" + self.url.Host + url
+			url = tr.url.Scheme + "://" + tr.url.Host + url
 		} else {
-			url = self.url.Scheme + "://" + self.url.Host + self.url.Path + url
+			url = tr.url.Scheme + "://" + tr.url.Host + tr.url.Path + url
 		}
 		return url
 	}

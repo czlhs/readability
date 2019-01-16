@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	v "ixiaochuan.cn/connsrv/test"
 )
 
 type TCandidateItem struct {
@@ -22,6 +21,7 @@ type TReadability struct {
 
 	Title   string
 	Content string
+	Cover   string
 
 	Summary   string // 纯文字正文
 	ImageList []string
@@ -30,19 +30,20 @@ type TReadability struct {
 func NewFromReader(content string, url string) (*TReadability, error) {
 
 	tr := &TReadability{
-		html : content,
+		html:       content,
 		candidates: make(map[string]TCandidateItem, 0),
+		ImageList:  []string{},
 	}
 
-	if tr.url, err = nurl.Parse(url); tr.url == nil {
-		tr.url = &nurl.URL {
+	if tr.url, _ = nurl.Parse(url); tr.url == nil {
+		tr.url = &nurl.URL{
 			Scheme: "http",
-		},
+		}
 	}
 
-	tr.html = replaceBrs.ReplaceAllString(v.html, "</p><p>")
-	tr.html = strings.Replace(v.html, "<noscript>", "", -1)
-	tr.html = strings.Replace(v.html, "</noscript>", "", -1)
+	tr.html = replaceBrs.ReplaceAllString(tr.html, "</p><p>")
+	tr.html = strings.Replace(tr.html, "<noscript>", "", -1)
+	tr.html = strings.Replace(tr.html, "</noscript>", "", -1)
 
 	if tr.html == "" {
 		return nil, errors.New("empty html")
@@ -57,10 +58,10 @@ func NewFromReader(content string, url string) (*TReadability, error) {
 
 	tr.parse()
 
-	return v, nil
+	return tr, nil
 }
 
-func (tr *TReadability) Parse() {
+func (tr *TReadability) parse() {
 	tr.Title = tr.htmlDoc.Find("title").Text()
 
 	// start Parse body
@@ -68,8 +69,7 @@ func (tr *TReadability) Parse() {
 	// extract the article
 	if bodyNode := tr.extract(); bodyNode != nil {
 		tr.cleanArticle(bodyNode)
-		tr.fixImagesPath()
-	} 
+	}
 }
 
 func (tr *TReadability) preProcess() {
@@ -102,4 +102,3 @@ func (tr *TReadability) preProcess() {
 		}
 	})
 }
-
