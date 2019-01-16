@@ -1,7 +1,6 @@
 package readability
 
 import (
-	"errors"
 	nurl "net/url"
 	"strings"
 
@@ -27,7 +26,7 @@ type TReadability struct {
 	ImageList []string
 }
 
-func NewFromReader(content string, url string) (*TReadability, error) {
+func NewFromHTML(content string, url string) (*TReadability, error) {
 
 	tr := &TReadability{
 		html:       content,
@@ -44,10 +43,6 @@ func NewFromReader(content string, url string) (*TReadability, error) {
 	tr.html = replaceBrs.ReplaceAllString(tr.html, "</p><p>")
 	tr.html = strings.Replace(tr.html, "<noscript>", "", -1)
 	tr.html = strings.Replace(tr.html, "</noscript>", "", -1)
-
-	if tr.html == "" {
-		return nil, errors.New("empty html")
-	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(tr.html))
 	if err != nil {
@@ -114,11 +109,13 @@ func (tr *TReadability) getCover() string {
 			tmpCover, _ = s.Attr("content")
 		}
 	})
-	if cover != "" {
+	if cover == "" {
 		cover = tmpCover
 	}
+
 	if validURL.MatchString(cover) {
 		return tr.fixLink(cover)
 	}
+
 	return ""
 }
