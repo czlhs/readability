@@ -60,6 +60,7 @@ func (self *TReadability) extract() *goquery.Selection {
 	}
 	return nil
 }
+
 func (self *TReadability) initializeNode(node *goquery.Selection) TCandidateItem {
 	contentScore := 0.0
 	switch self.getTagName(node) {

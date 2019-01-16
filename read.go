@@ -159,10 +159,19 @@ func (tr *TReadability) cleanArticle(content *goquery.Selection) {
 	tr.fixHrefPath(content)
 
 	summary := ""
+	content.Find("*").Each(func(i int, s *goquery.Selection) {
+		if CheckHide(s) {
+			s.Find("*").Each(func(i int, z *goquery.Selection) {
+				s.Remove()
+			})
+			return
+		}
+	})
 	content.Find("p").Each(func(i int, s *goquery.Selection) {
-		summary = summary + s.Text()
+		summary = summary + s.Text() // TODO 很奇怪
 	})
 	tr.Summary = summary
+
 	html, err := content.Html()
 	if err != nil {
 		return

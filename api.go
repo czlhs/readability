@@ -62,8 +62,8 @@ func NewFromReader(content string, url string) (*TReadability, error) {
 }
 
 func (tr *TReadability) parse() {
+	tr.Cover = tr.getCover()
 	tr.Title = tr.htmlDoc.Find("title").Text()
-
 	// start Parse body
 	tr.preProcess()
 	// extract the article
@@ -101,4 +101,24 @@ func (tr *TReadability) preProcess() {
 			}
 		}
 	})
+}
+
+// 需要在获取content之前调
+func (tr *TReadability) getCover() string {
+	var tmpCover, cover string
+	tr.htmlDoc.Find("meta").Each(func(i int, s *goquery.Selection) {
+		if prop, ok := s.Attr("property"); ok && prop == "og:image" {
+			cover, _ = s.Attr("content")
+		}
+		if itemprop, ok := s.Attr("itemprop"); ok && itemprop == "image" {
+			tmpCover, _ = s.Attr("content")
+		}
+	})
+	if cover != "" {
+		cover = tmpCover
+	}
+	if validURL.MatchString(cover) {
+		return tr.fixLink(cover)
+	}
+	return ""
 }
