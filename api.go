@@ -3,20 +3,18 @@ package readability
 import (
 	nurl "net/url"
 	"strings"
-
-	"github.com/PuerkitoBio/goquery"
 )
 
 type TCandidateItem struct {
 	score float64
-	node  *goquery.Selection
+	node  *Node
 }
 
 type TReadability struct {
 	html       string
 	url        *nurl.URL
-	htmlDoc    *goquery.Document
 	candidates map[string]TCandidateItem
+	root       *Node
 
 	Title   string
 	Content string
@@ -40,16 +38,15 @@ func NewFromHTML(content string, url string) (*TReadability, error) {
 		}
 	}
 
-	tr.html = replaceBrs.ReplaceAllString(tr.html, "</p><p>")
-	tr.html = strings.Replace(tr.html, "<noscript>", "", -1)
-	tr.html = strings.Replace(tr.html, "</noscript>", "", -1)
-
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(tr.html))
+	// tr.html = replaceBrs.ReplaceAllString(tr.html, "</p><p>")
+	// tr.html = strings.Replace(tr.html, "<noscript>", "", -1)
+	// tr.html = strings.Replace(tr.html, "</noscript>", "", -1)
+	doc, err := NewDocument(strings.NewReader(tr.html))
+	// doc, err := goquery.NewDocumentFromReader(strings.NewReader(tr.html))
 	if err != nil {
 		return nil, err
 	}
-
-	tr.htmlDoc = doc
+	tr.root = doc
 
 	tr.parse()
 
@@ -57,65 +54,42 @@ func NewFromHTML(content string, url string) (*TReadability, error) {
 }
 
 func (tr *TReadability) parse() {
-	tr.Cover = tr.getCover()
-	tr.Title = tr.htmlDoc.Find("title").Text()
+	// tr.Cover = tr.getCover()
+	// tr.Title = tr.htmlDoc.Find("title").Text()
 	// start Parse body
 	tr.preProcess()
 	// extract the article
-	if bodyNode := tr.extract(); bodyNode != nil {
-		tr.cleanArticle(bodyNode)
-	}
+	tr.grabArticle()
 }
 
 func (tr *TReadability) preProcess() {
-	tr.htmlDoc.Find("script").Remove()
-	tr.htmlDoc.Find("style").Remove()
-	tr.htmlDoc.Find("link").Remove()
-
-	tr.htmlDoc.Find("*").Each(func(i int, elem *goquery.Selection) {
-		if tr.isComment(elem) {
-			elem.Remove()
-			return
-		}
-		unlikelyMatchString := elem.AttrOr("id", "") + " " + elem.AttrOr("class", "")
-
-		if unlikelyCandidates.MatchString(unlikelyMatchString) &&
-			!okMaybeItsACandidate.MatchString(unlikelyMatchString) &&
-			tr.getTagName(elem) != "body" {
-			elem.Remove()
-			return
-		}
-		if unlikelyElements.MatchString(tr.getTagName(elem)) {
-			elem.Remove()
-			return
-		}
-		if tr.getTagName(elem) == "div" {
-			s, _ := elem.Html()
-			if !divToPElements.MatchString(s) {
-				elem.Nodes[0].Data = "p"
-			}
-		}
+	tr.root.WorkElementNode("script", func(n *Node) {
+		n.Remove()
 	})
+	// tr.htmlDoc.Find("style").Remove()
+	// tr.htmlDoc.Find("link").Remove()
 }
 
 // 需要在获取content之前调
 func (tr *TReadability) getCover() string {
-	var tmpCover, cover string
-	tr.htmlDoc.Find("meta").Each(func(i int, s *goquery.Selection) {
-		if prop, ok := s.Attr("property"); ok && prop == "og:image" {
-			cover, _ = s.Attr("content")
-		}
-		if itemprop, ok := s.Attr("itemprop"); ok && itemprop == "image" {
-			tmpCover, _ = s.Attr("content")
-		}
-	})
-	if cover == "" {
-		cover = tmpCover
-	}
+	// var tmpCover, cover string
+	// tr.htmlDoc.Find("meta").Each(func(i int, s *goquery.Selection) {
+	// 	s.Html()
+	// 	if prop, ok := s.Attr("property"); ok && prop == "og:image" {
+	// 		cover, _ = s.Attr("content")
+	// 	}
+	// 	s.Text()
+	// 	if itemprop, ok := s.Attr("itemprop"); ok && itemprop == "image" {
+	// 		tmpCover, _ = s.Attr("content")
+	// 	}
+	// })
+	// if cover == "" {
+	// 	cover = tmpCover
+	// }
 
-	if validURL.MatchString(cover) {
-		return tr.fixLink(cover)
-	}
+	// if validURL.MatchString(cover) {
+	// 	return tr.fixLink(cover)
+	// }
 
 	return ""
 }

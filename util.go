@@ -4,23 +4,20 @@ import (
 	"fmt"
 	"strings"
 
-	"crypto/md5"
-	"unicode/utf8"
-
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
 )
 
-func HashStr(node *goquery.Selection) string {
+func HashStr(node *Node) string {
 	if node == nil {
 		return ""
 	}
-	html, _ := node.Html()
-	return fmt.Sprintf("%x", md5.Sum([]byte(html)))
+	// 优化
+	return fmt.Sprintf("%p", node)
 }
 
 func strLen(str string) int {
-	return utf8.RuneCountInString(str)
+	return len([]rune(str))
 }
 func (tr *TReadability) getTagName(node *goquery.Selection) string {
 	if node == nil {
